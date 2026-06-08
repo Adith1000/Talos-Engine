@@ -1,37 +1,57 @@
 """
 main.py  ←  CLI entry point (no HTTP server)
 
-Use this when you want to run the workflow directly from the terminal
-without spinning up the FastAPI server.
+Runs a default linear pipeline (checkout → setup → install → test → deploy)
+straight from env vars, using the same compiler the API uses.
 
     python main.py
-
-All settings are read from environment variables (or .env file).
 """
 
 import config
-from payload_generator import (
-    generate_shell_script,
-    get_default_ci_yml,
-    get_default_test_content,
-)
+from payload_generator import compile_workflow, generate_shell_script
 from docker_runner import run_in_container
 
 
+def _default_graph(framework: str, target: str):
+    """A simple linear DAG mirroring the original monolith's behaviour."""
+    nodes = [
+        {"id": "n1", "type": "checkout", "data": {}},
+        {"id": "n2", "type": "setup-node", "data": {"nodeVersion": "20"}},
+        {"id": "n3", "type": "install", "data": {}},
+        {"id": "n4", "type": "test", "data": {"framework": framework}},
+        {"id": "n5", "type": "deploy", "data": {"target": target}},
+    ]
+    edges = [
+        {"source": "n1", "target": "n2"},
+        {"source": "n2", "target": "n3"},
+        {"source": "n3", "target": "n4"},
+        {"source": "n4", "target": "n5"},
+    ]
+    return nodes, edges
+
+
 def main() -> None:
-    # Fail fast if required env vars are missing
     config.validate_required()
+
+    framework, target = "playwright", "vercel"
+    nodes, edges = _default_graph(framework, target)
 
     print(f"[main] Repo  : {config.REPO_URL}")
     print(f"[main] Branch: {config.BRANCH}")
     print(f"[main] Image : {config.DOCKER_IMAGE}\n")
 
+    ci_yml = compile_workflow(
+        nodes, edges,
+        testing_framework=framework,
+        deployment_target=target,
+    )
+
     shell_script = generate_shell_script(
         repo_url=config.REPO_URL,
         branch=config.BRANCH,
         container_clone_dir=config.CONTAINER_CLONE_DIR,
-        ci_yml_content=get_default_ci_yml(),
-        test_content=get_default_test_content(),
+        ci_yml_content=ci_yml,
+        testing_framework=framework,
     )
 
     logs = run_in_container(

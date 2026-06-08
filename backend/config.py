@@ -30,9 +30,24 @@ CONTAINER_TIMEOUT: int = int(os.getenv("CONTAINER_TIMEOUT", "300"))
 API_HOST: str = os.getenv("API_HOST", "0.0.0.0")
 API_PORT: int = int(os.getenv("API_PORT", "8000"))
 
-# Allowed CORS origins (comma-separated in env, e.g. "http://localhost:5173,https://myapp.com")
 _raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
 CORS_ORIGINS: list[str] = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
+
+# ─── Pipeline capability registry ─────────────────────────────────────────────
+# These are the single source of truth shared (conceptually) with the frontend.
+# Keep the keys stable; the YAML compiler dispatches on them.
+
+SUPPORTED_FRAMEWORKS: set[str] = {"playwright", "cypress", "jest", "vitest", "none"}
+SUPPORTED_DEPLOY_TARGETS: set[str] = {"vercel", "github-pages", "aws-s3", "none"}
+
+# Which secret names each deploy target expects. Used for validation + UI hints.
+TARGET_SECRETS: dict[str, list[str]] = {
+    "vercel": ["VERCEL_TOKEN", "VERCEL_ORG_ID", "VERCEL_PROJECT_ID"],
+    "github-pages": [],  # uses the built-in GITHUB_TOKEN
+    "aws-s3": ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_S3_BUCKET"],
+    "none": [],
+}
 
 
 # ─── Validation helper ────────────────────────────────────────────────────────
